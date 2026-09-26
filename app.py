@@ -17,7 +17,7 @@ except Exception:
     st.error("❌ Missing Spotify API Credentials in Streamlit Secrets!")
     st.stop()
 
-REDIRECT_URI = "https://streamlit.app"
+REDIRECT_URI = "https://spotify-account-migrator.streamlit.app/"
 SCOPE = "user-library-read user-library-modify user-follow-read user-follow-modify playlist-read-private playlist-modify-private playlist-modify-public"
 
 # --- INITIALIZE WEB SESSION MEMORY ---
