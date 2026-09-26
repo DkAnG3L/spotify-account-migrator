@@ -47,7 +47,7 @@ if "code" in query_params and not st.session_state.old_connected and not st.sess
         sp_old = spotipy.Spotify(auth=token_info)
         
         with st.spinner("⚡ Fetching your music library... Please wait."):
-            # Fetch Liked Songs
+            # Fetch Liked Songs Safely
             liked_tracks = []
             offset = 0
             while True:
@@ -55,7 +55,9 @@ if "code" in query_params and not st.session_state.old_connected and not st.sess
                 items = results['items']
                 if not items: break
                 for item in items:
-                    liked_tracks.append(item['track']['id'])
+                    # FIXED: Safety check for unavailable, local, or deleted tracks
+                    if item.get('track') and item['track'].get('id'):
+                        liked_tracks.append(item['track']['id'])
                 offset += len(items)
 
             # Fetch Followed Artists Safely
@@ -68,7 +70,6 @@ if "code" in query_params and not st.session_state.old_connected and not st.sess
                 for artist in artists:
                     artists_to_follow.append(artist['id'])
                 
-                # FIXED: Safety check for accounts with 0 followed artists
                 if 'cursor' in results['artists'] and results['artists']['cursor'] is not None:
                     last_artist_id = results['artists']['cursor']['after']
                 else:
@@ -76,7 +77,7 @@ if "code" in query_params and not st.session_state.old_connected and not st.sess
                     
                 if not last_artist_id: break
 
-            # Fetch Playlists
+            # Fetch Playlists Safely
             playlists_to_copy = []
             offset = 0
             current_user_id = sp_old.current_user()['id']
@@ -93,7 +94,8 @@ if "code" in query_params and not st.session_state.old_connected and not st.sess
                             t_items = t_results['items']
                             if not t_items: break
                             for t_item in t_items:
-                                if t_item['track'] and t_item['track']['id']:
+                                # FIXED: Safety check inside playlist tracks as well
+                                if t_item.get('track') and t_item['track'].get('id'):
                                     track_ids.append(t_item['track']['id'])
                             playlist_tracks_offset += len(t_items)
                         
