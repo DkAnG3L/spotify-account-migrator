@@ -17,7 +17,7 @@ except Exception:
     st.error("❌ Missing Spotify API Credentials in Streamlit Secrets!")
     st.stop()
 
-REDIRECT_URI = "https://spotify-account-migrator.streamlit.app/"
+REDIRECT_URI = "https://spotify-account-migrator.streamlit.app"
 SCOPE = "user-library-read user-library-modify user-follow-read user-follow-modify playlist-read-private playlist-modify-private playlist-modify-public"
 
 # --- INITIALIZE WEB SESSION MEMORY ---
@@ -37,7 +37,6 @@ if "code" in query_params and "state" in query_params:
     code = query_params["code"]
     state = query_params["state"]
     
-    # Check if the Spotify callback belongs to the OLD account step
     if state == "old_account" and not st.session_state.old_connected:
         try:
             auth_manager_old = SpotifyOAuth(
@@ -47,8 +46,7 @@ if "code" in query_params and "state" in query_params:
             token_info = auth_manager_old.get_access_token(code, as_dict=True)
             sp_old = spotipy.Spotify(auth=token_info["access_token"])
             
-            with st.spinner("⚡ Fetching your music library... Please wait."):
-                # Fetch Liked Songs Safely
+            with st.spinner("⚡ Fetching your music library... Please wait. This might take a minute for large libraries."):
                 liked_tracks = []
                 offset = 0
                 while True:
@@ -59,8 +57,8 @@ if "code" in query_params and "state" in query_params:
                         if item.get('track') and item['track'].get('id'):
                             liked_tracks.append(item['track']['id'])
                     offset += len(items)
+                    time.sleep(0.3)
 
-                # Fetch Followed Artists Safely
                 artists_to_follow = []
                 last_artist_id = None
                 while True:
@@ -69,13 +67,15 @@ if "code" in query_params and "state" in query_params:
                     if not artists: break
                     for artist in artists:
                         artists_to_follow.append(artist['id'])
+                    
                     if 'cursor' in results['artists'] and results['artists']['cursor'] is not None:
                         last_artist_id = results['artists']['cursor']['after']
                     else:
                         last_artist_id = None
+                        
                     if not last_artist_id: break
+                    time.sleep(0.3)
 
-                # Fetch Playlists Safely
                 playlists_to_copy = []
                 offset = 0
                 current_user_id = sp_old.current_user()['id']
@@ -94,7 +94,8 @@ if "code" in query_params and "state" in query_params:
                                 for t_item in t_items:
                                     if t_item.get('track') and t_item['track'].get('id'):
                                         track_ids.append(t_item['track']['id'])
-                                    playlist_tracks_offset += len(t_items)
+                                playlist_tracks_offset += len(t_items)
+                                time.sleep(0.2)
                             
                             playlists_to_copy.append({
                                 'name': item['name'],
@@ -103,6 +104,7 @@ if "code" in query_params and "state" in query_params:
                                 'tracks': track_ids
                             })
                     offset += len(items)
+                    time.sleep(0.3)
 
                 st.session_state.old_account_data = {
                     "liked_tracks": liked_tracks,
@@ -110,12 +112,11 @@ if "code" in query_params and "state" in query_params:
                     "playlists": playlists_to_copy
                 }
                 st.session_state.old_connected = True
-                st.query_params.clear() # Wipe the URL to clean the state
+                st.query_params.clear() 
                 st.rerun()
         except Exception as e:
             st.error(f"Old account authentication failed: {e}")
 
-    # Check if the Spotify callback belongs to the NEW account step
     elif state == "new_account" and st.session_state.old_connected and not st.session_state.new_connected:
         try:
             auth_manager_new = SpotifyOAuth(
@@ -125,7 +126,7 @@ if "code" in query_params and "state" in query_params:
             token_info_new = auth_manager_new.get_access_token(code, as_dict=True)
             st.session_state.token_new = token_info_new["access_token"]
             st.session_state.new_connected = True
-            st.query_params.clear() # Wipe the URL
+            st.query_params.clear() 
             st.rerun()
         except Exception as e:
             st.error(f"New account authentication failed: {e}")
@@ -181,7 +182,7 @@ if st.session_state.new_connected:
                 sp_new.current_user_saved_tracks_add(tracks=chunk)
                 current_step += len(chunk)
                 progress_bar.progress(min(current_step / total_steps, 1.0))
-                time.sleep(0.2)
+                time.sleep(0.3)
 
         if data['artists']:
             status_text.text("Following Artists...")
@@ -190,7 +191,7 @@ if st.session_state.new_connected:
                 sp_new.user_follow_artists(ids=chunk)
                 current_step += len(chunk)
                 progress_bar.progress(min(current_step / total_steps, 1.0))
-                time.sleep(0.2)
+                time.sleep(0.3)
 
         if data['playlists']:
             new_user_id = sp_new.current_user()['id']
@@ -203,7 +204,7 @@ if st.session_state.new_connected:
                     for i in range(0, len(pl['tracks']), 100):
                         chunk = pl['tracks'][i:i+100]
                         sp_new.playlist_add_items(playlist_id=new_pl['id'], items=chunk)
-                        time.sleep(0.2)
+                        time.sleep(0.3)
                 current_step += 1
                 progress_bar.progress(min(current_step / total_steps, 1.0))
 
@@ -211,9 +212,8 @@ if st.session_state.new_connected:
         st.balloons() 
         st.success("🎉 Success! Your complete library has been migrated!")
         
-        # Reset memory after success
+        # FIXED INDENTATION: These lines are now correctly inside the button logic!
         st.session_state.old_account_data = None
         st.session_state.old_connected = False
         st.session_state.new_connected = False
         st.session_state.token_new = None
-        st.rerun()
