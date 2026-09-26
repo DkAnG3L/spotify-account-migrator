@@ -3,14 +3,13 @@ import spotipy
 from spotipy.oauth2 import SpotifyOAuth
 import time
 
-# --- STREAMLIT PAGE CONFIG ---
+# --- STREAMLIT PAGE CONFIGURATION ---
 st.set_page_config(page_title="Spotify Migrator", page_icon="🎵", layout="centered")
 
 st.title("🎵 Spotify Account Migrator")
 st.write("Transfer your Liked Songs, Playlists, and Followed Artists to a new account completely free.")
 
-# --- SPOTIFY API CONFIG (From Streamlit Secrets) ---
-# When deployed, you will add these in the Streamlit Cloud Dashboard settings
+# --- SPOTIFY API CREDENTIALS ---
 try:
     CLIENT_ID = st.secrets["SPOTIFY_CLIENT_ID"]
     CLIENT_SECRET = st.secrets["SPOTIFY_CLIENT_SECRET"]
@@ -18,13 +17,10 @@ except Exception:
     st.error("❌ Missing Spotify API Credentials in Streamlit Secrets!")
     st.stop()
 
-# Streamlit URL format (Replace with your actual streamlit app URL once deployed)
-REDIRECT_URI = "https://spotify-account-migrator.streamlit.app/" # Change this to your live URL later, e.g., https://streamlit.app
-
+REDIRECT_URI = "https://spotify-account-migrator.streamlit.app/"
 SCOPE = "user-library-read user-library-modify user-follow-read user-follow-modify playlist-read-private playlist-modify-private playlist-modify-public"
 
-# --- INITIALIZE SESSION STATE ---
-# This acts as a temporary memory for each user browsing the website
+# --- INITIALIZE WEB SESSION MEMORY ---
 if "old_account_data" not in st.session_state:
     st.session_state.old_account_data = None
 if "old_connected" not in st.session_state:
@@ -32,10 +28,9 @@ if "old_connected" not in st.session_state:
 if "new_connected" not in st.session_state:
     st.session_state.new_connected = False
 
-# --- STEP 1: CONNECT & FETCH FROM OLD ACCOUNT ---
+# --- STEP 1: SCANNING THE SOURCE (OLD) ACCOUNT ---
 st.subheader("Step 1: Connect Old Account")
 
-# Spotify OAuth Setup
 auth_manager_old = SpotifyOAuth(
     client_id=CLIENT_ID,
     client_secret=CLIENT_SECRET,
@@ -45,7 +40,6 @@ auth_manager_old = SpotifyOAuth(
     cache_path=".cache-old"
 )
 
-# Check if Spotify redirected back with an auth code
 query_params = st.query_params
 if "code" in query_params and not st.session_state.old_connected and not st.session_state.new_connected:
     try:
@@ -53,7 +47,7 @@ if "code" in query_params and not st.session_state.old_connected and not st.sess
         sp_old = spotipy.Spotify(auth=token_info)
         
         with st.spinner("⚡ Fetching your music library... Please wait."):
-            # 1. Fetch Liked Songs
+            # Fetch Liked Songs
             liked_tracks = []
             offset = 0
             while True:
@@ -64,7 +58,7 @@ if "code" in query_params and not st.session_state.old_connected and not st.sess
                     liked_tracks.append(item['track']['id'])
                 offset += len(items)
 
-            # 2. Fetch Artists
+            # Fetch Followed Artists Safely
             artists_to_follow = []
             last_artist_id = None
             while True:
@@ -73,10 +67,16 @@ if "code" in query_params and not st.session_state.old_connected and not st.sess
                 if not artists: break
                 for artist in artists:
                     artists_to_follow.append(artist['id'])
-                last_artist_id = results['artists']['cursor']['after']
+                
+                # FIXED: Safety check for accounts with 0 followed artists
+                if 'cursor' in results['artists'] and results['artists']['cursor'] is not None:
+                    last_artist_id = results['artists']['cursor']['after']
+                else:
+                    last_artist_id = None
+                    
                 if not last_artist_id: break
 
-            # 3. Fetch Playlists
+            # Fetch Playlists
             playlists_to_copy = []
             offset = 0
             current_user_id = sp_old.current_user()['id']
@@ -105,18 +105,16 @@ if "code" in query_params and not st.session_state.old_connected and not st.sess
                         })
                 offset += len(items)
 
-            # Save everything to the temporary session memory
             st.session_state.old_account_data = {
                 "liked_tracks": liked_tracks,
                 "artists": artists_to_follow,
                 "playlists": playlists_to_copy
             }
             st.session_state.old_connected = True
-            st.query_params.clear() # Clear the code from URL
+            st.query_params.clear() 
     except Exception as e:
         st.error(f"Authentication failed: {e}")
 
-# Display UI based on connection state
 if not st.session_state.old_connected:
     auth_url_old = auth_manager_old.get_authorize_url()
     st.link_button("🔌 Connect Old Account", auth_url_old, type="primary")
@@ -124,7 +122,7 @@ else:
     data = st.session_state.old_account_data
     st.success(f"✅ Successfully scanned! Found: {len(data['liked_tracks'])} Liked Songs, {len(data['artists'])} Artists, {len(data['playlists'])} Playlists.")
 
-# --- STEP 2: CONNECT TO NEW ACCOUNT ---
+# --- STEP 2: PAIRING TARGET DESTINATION (NEW) ACCOUNT ---
 if st.session_state.old_connected:
     st.divider()
     st.subheader("Step 2: Connect New Account")
@@ -154,7 +152,7 @@ if st.session_state.old_connected:
     else:
         st.success("✅ New account connected and ready!")
 
-# --- STEP 3: EXECUTE MIGRATION ---
+# --- STEP 3: EXECUTE BULK DATA TRANSFER MIGRATION ---
 if st.session_state.new_connected:
     st.divider()
     st.subheader("Step 3: Start Transfer")
@@ -163,14 +161,12 @@ if st.session_state.new_connected:
         sp_new = st.session_state.sp_new
         data = st.session_state.old_account_data
         
-        # UI Progress elements built into Streamlit
         status_text = st.empty()
         progress_bar = st.progress(0)
         
         total_steps = len(data['liked_tracks']) + len(data['artists']) + len(data['playlists'])
         current_step = 0
         
-        # 1. Transfer Liked Songs
         if data['liked_tracks']:
             status_text.text("Copying Liked Songs...")
             for i in range(0, len(data['liked_tracks']), 50):
@@ -180,7 +176,6 @@ if st.session_state.new_connected:
                 progress_bar.progress(min(current_step / total_steps, 1.0))
                 time.sleep(0.2)
 
-        # 2. Transfer Artists
         if data['artists']:
             status_text.text("Following Artists...")
             for i in range(0, len(data['artists']), 50):
@@ -190,7 +185,6 @@ if st.session_state.new_connected:
                 progress_bar.progress(min(current_step / total_steps, 1.0))
                 time.sleep(0.2)
 
-        # 3. Transfer Playlists
         if data['playlists']:
             new_user_id = sp_new.current_user()['id']
             for pl in data['playlists']:
@@ -207,10 +201,9 @@ if st.session_state.new_connected:
                 progress_bar.progress(min(current_step / total_steps, 1.0))
 
         status_text.empty()
-        st.balloons() # Fun Streamlit feature that throws digital balloons on screen!
+        st.balloons() 
         st.success("🎉 Success! Your complete library has been migrated!")
         
-        # Reset memory after success
         st.session_state.old_account_data = None
         st.session_state.old_connected = False
         st.session_state.new_connected = False
