@@ -19,7 +19,7 @@ except Exception:
     st.stop()
 
 # Streamlit URL format (Replace with your actual streamlit app URL once deployed)
-REDIRECT_URI = "http://localhost:8501/" # Change this to your live URL later, e.g., https://streamlit.app
+REDIRECT_URI = "https://spotify-account-migrator.streamlit.app/" # Change this to your live URL later, e.g., https://streamlit.app
 
 SCOPE = "user-library-read user-library-modify user-follow-read user-follow-modify playlist-read-private playlist-modify-private playlist-modify-public"
 
