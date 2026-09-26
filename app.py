@@ -51,7 +51,7 @@ if mode == "1. Scan & Backup Old Account":
                 sp = spotipy.Spotify(auth=token_info["access_token"])
                 
                 with st.spinner("⚡ Scanning your Spotify library... Please wait."):
-                    # 1. Fetch Liked Songs Safely
+                    # 1. Fetch Liked Songs Safely (FAST SCAN)
                     liked_tracks = []
                     offset = 0
                     while True:
@@ -61,7 +61,6 @@ if mode == "1. Scan & Backup Old Account":
                             if item.get('track') and item['track'].get('id'):
                                 liked_tracks.append(item['track']['id'])
                         offset += len(res['items'])
-                        time.sleep(0.2)
 
                     # 2. Fetch Artists Safely
                     artists_to_follow = []
@@ -77,7 +76,6 @@ if mode == "1. Scan & Backup Old Account":
                         else:
                             last_id = None
                         if not last_id: break
-                        time.sleep(0.2)
 
                     # 3. Fetch Playlists Safely
                     playlists_to_copy = []
@@ -97,14 +95,12 @@ if mode == "1. Scan & Backup Old Account":
                                         if t_item.get('track') and t_item['track'].get('id'):
                                             t_ids.append(t_item['track']['id'])
                                     pl_offset += len(t_res['items'])
-                                    time.sleep(0.1)
                                 
                                 playlists_to_copy.append({
                                     'name': item['name'], 'description': item['description'] or "",
                                     'public': item['public'], 'tracks': t_ids
                                 })
                         offset += len(res['items'])
-                        time.sleep(0.2)
 
                 st.session_state.saved_library = {
                     "tracks": liked_tracks, "artists": artists_to_follow, "playlists": playlists_to_copy
@@ -140,7 +136,7 @@ elif mode == "2. Transfer to New Account":
                 total = len(lib['tracks']) + len(lib['artists']) + len(lib['playlists'])
                 current = 0
                 
-                # 1. Copy Songs
+                # 1. Copy Songs with Safe Delays
                 if lib['tracks']:
                     status.markdown("### 📥 Injecting Liked Songs...")
                     for i in range(0, len(lib['tracks']), 50):
@@ -151,7 +147,7 @@ elif mode == "2. Transfer to New Account":
                         bar.progress(min(current / total, 1.0))
                         time.sleep(0.3)
 
-                # 2. Copy Artists
+                # 2. Copy Artists with Safe Delays
                 if lib['artists']:
                     status.markdown("### 👤 Following Artists...")
                     art_curr = 0
@@ -164,7 +160,7 @@ elif mode == "2. Transfer to New Account":
                         bar.progress(min(current / total, 1.0))
                         time.sleep(0.3)
 
-                # 3. Copy Playlists
+                # 3. Copy Playlists with Safe Delays
                 if lib['playlists']:
                     status.markdown("### 📂 Creating Playlists...")
                     u_id_new = sp_new.current_user()['id']
