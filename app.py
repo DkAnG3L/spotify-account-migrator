@@ -27,35 +27,25 @@ if "old_connected" not in st.session_state:
     st.session_state.old_connected = False
 if "new_connected" not in st.session_state:
     st.session_state.new_connected = False
-if "token_old" not in st.session_state:
-    st.session_state.token_old = None
 if "token_new" not in st.session_state:
     st.session_state.token_new = None
 
-# --- SETUP OAUTH MANAGERS WITH NO CACHE FILES ---
-auth_manager_old = SpotifyOAuth(
-    client_id=CLIENT_ID, client_secret=CLIENT_SECRET, redirect_uri=REDIRECT_URI,
-    scope=SCOPE, show_dialog=True, cache_path=None
-)
-
-auth_manager_new = SpotifyOAuth(
-    client_id=CLIENT_ID, client_secret=CLIENT_SECRET, redirect_uri=REDIRECT_URI,
-    scope=SCOPE, show_dialog=True, cache_path=None
-)
-
-# Intercept callback parameters
+# --- AUTHENTICATION LOGIC ---
 query_params = st.query_params
 
-# --- AUTHENTICATION LOGIC ---
-if "code" in query_params:
+if "code" in query_params and "state" in query_params:
     code = query_params["code"]
+    state = query_params["state"]
     
-    # If Step 1 is not done yet, this code belongs to the OLD account
-    if not st.session_state.old_connected:
+    # Check if the Spotify callback belongs to the OLD account step
+    if state == "old_account" and not st.session_state.old_connected:
         try:
+            auth_manager_old = SpotifyOAuth(
+                client_id=CLIENT_ID, client_secret=CLIENT_SECRET, redirect_uri=REDIRECT_URI,
+                scope=SCOPE, show_dialog=True, cache_path=None, state="old_account"
+            )
             token_info = auth_manager_old.get_access_token(code, as_dict=True)
-            st.session_state.token_old = token_info["access_token"]
-            sp_old = spotipy.Spotify(auth=st.session_state.token_old)
+            sp_old = spotipy.Spotify(auth=token_info["access_token"])
             
             with st.spinner("⚡ Fetching your music library... Please wait."):
                 # Fetch Liked Songs Safely
@@ -104,7 +94,7 @@ if "code" in query_params:
                                 for t_item in t_items:
                                     if t_item.get('track') and t_item['track'].get('id'):
                                         track_ids.append(t_item['track']['id'])
-                                playlist_tracks_offset += len(t_items)
+                                    playlist_tracks_offset += len(t_items)
                             
                             playlists_to_copy.append({
                                 'name': item['name'],
@@ -120,18 +110,22 @@ if "code" in query_params:
                     "playlists": playlists_to_copy
                 }
                 st.session_state.old_connected = True
-                st.query_params.clear() # Clear URL to break the loop!
+                st.query_params.clear() # Wipe the URL to clean the state
                 st.rerun()
         except Exception as e:
             st.error(f"Old account authentication failed: {e}")
 
-    # If Step 1 IS done, but Step 2 is NOT, this code belongs to the NEW account
-    elif st.session_state.old_connected and not st.session_state.new_connected:
+    # Check if the Spotify callback belongs to the NEW account step
+    elif state == "new_account" and st.session_state.old_connected and not st.session_state.new_connected:
         try:
+            auth_manager_new = SpotifyOAuth(
+                client_id=CLIENT_ID, client_secret=CLIENT_SECRET, redirect_uri=REDIRECT_URI,
+                scope=SCOPE, show_dialog=True, cache_path=None, state="new_account"
+            )
             token_info_new = auth_manager_new.get_access_token(code, as_dict=True)
             st.session_state.token_new = token_info_new["access_token"]
             st.session_state.new_connected = True
-            st.query_params.clear() # Clear URL
+            st.query_params.clear() # Wipe the URL
             st.rerun()
         except Exception as e:
             st.error(f"New account authentication failed: {e}")
@@ -139,6 +133,10 @@ if "code" in query_params:
 # --- STEP 1: UI RENDER ---
 st.subheader("Step 1: Connect Old Account")
 if not st.session_state.old_connected:
+    auth_manager_old = SpotifyOAuth(
+        client_id=CLIENT_ID, client_secret=CLIENT_SECRET, redirect_uri=REDIRECT_URI,
+        scope=SCOPE, show_dialog=True, cache_path=None, state="old_account"
+    )
     auth_url_old = auth_manager_old.get_authorize_url()
     st.link_button("🔌 Connect Old Account", auth_url_old, type="primary")
 else:
@@ -151,7 +149,11 @@ if st.session_state.old_connected:
     st.subheader("Step 2: Connect New Account")
     
     if not st.session_state.new_connected:
-        st.info("⚠️ Click 'Not you?' or Log Out at spotify.com before connecting the new account!")
+        st.info("⚠️ Before clicking below, make sure you are logged in to your NEW account on spotify.com!")
+        auth_manager_new = SpotifyOAuth(
+            client_id=CLIENT_ID, client_secret=CLIENT_SECRET, redirect_uri=REDIRECT_URI,
+            scope=SCOPE, show_dialog=True, cache_path=None, state="new_account"
+        )
         auth_url_new = auth_manager_new.get_authorize_url()
         st.link_button("🔌 Connect New Account", auth_url_new, type="primary")
     else:
@@ -213,6 +215,5 @@ if st.session_state.new_connected:
         st.session_state.old_account_data = None
         st.session_state.old_connected = False
         st.session_state.new_connected = False
-        st.session_state.token_old = None
         st.session_state.token_new = None
         st.rerun()
