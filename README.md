@@ -200,7 +200,7 @@ For local development:
 http://127.0.0.1:8501/
 ```
 
-If deploying the application to Streamlit Community Cloud, change the redirect URI in `app_local_fixed.py` to the URL of the deployed application.
+If deploying the application to Streamlit Community Cloud, change the redirect URI in `app.py` to the URL of the deployed application.
 
 Example:
 
@@ -217,7 +217,7 @@ Then add the exact same URL to the Spotify Developer Dashboard.
 Start Streamlit:
 
 ```bash
-streamlit run app_local_fixed.py
+streamlit run app.py
 ```
 
 The application will normally be available at:
@@ -453,7 +453,7 @@ A minimal project can look like this:
 ```text
 spotify-account-migrator/
 │
-├── app_local_fixed.py
+├── app.py
 ├── README.md
 ├── .gitignore
 │
