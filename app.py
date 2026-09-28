@@ -747,31 +747,73 @@ def add_playlist_tracks(
     playlist_id,
     track_uris
 ):
+    """
+    Add Spotify track URIs to a playlist.
+
+    Spotify's current endpoint is:
+        POST /playlists/{playlist_id}/items
+
+    The API accepts up to 100 URIs per request. We send the URIs
+    in the JSON request body instead of the query string. This avoids
+    URL-length problems and prevents malformed query parameters from
+    being interpreted as playlist IDs/parameters.
+    """
 
     if not track_uris:
         return
 
-    # Keep batches at 40.
+    # Only keep valid Spotify track URIs.
+    # This also protects the transfer from None/empty/malformed values
+    # that can exist in very old or unavailable playlist entries.
+    valid_uris = []
+
+    for uri in track_uris:
+        if not isinstance(uri, str):
+            continue
+
+        uri = uri.strip()
+
+        if not uri.startswith("spotify:track:"):
+            continue
+
+        track_id = uri[len("spotify:track:"):].strip()
+
+        # Spotify Base62 IDs are 22 characters and use [A-Za-z0-9].
+        if len(track_id) != 22:
+            continue
+
+        if not track_id.isalnum():
+            continue
+
+        valid_uris.append(
+            f"spotify:track:{track_id}"
+        )
+
+    if not valid_uris:
+        return
+
+    # Spotify allows a maximum of 100 items per request.
     for i in range(
         0,
-        len(track_uris),
-        40
+        len(valid_uris),
+        100
     ):
 
-        chunk = track_uris[
-            i:i + 40
+        chunk = valid_uris[
+            i:i + 100
         ]
 
         spotify_request(
             access_token,
             "POST",
             f"playlists/{playlist_id}/items",
-            params={
-                "uris": ",".join(chunk)
+            json_data={
+                "uris": chunk
             }
         )
 
-        time.sleep(0.8)
+        # Small delay between playlist batches.
+        time.sleep(0.5)
 
 
 # ============================================================
